@@ -1,0 +1,104 @@
+##Getting more out of Javascript with `.bind()`
+
+Having worked with Javascript for a little while, you probably have come across something that looks like:
+
+```javascript
+var argsArray = Array.prototype.slice.call(arguments);
+```
+
+This is quite a powerful pattern, allowing the JavaScript practitioner that you are to call a functions defined on the `Array.prototype` object and invoke it on an explicit `this`; in the current case it happens to be the `arguments` object which is an **array-like** object but not actually an array.
+
+Another variation on this pattern is the use of `.apply()` instead of `.call()`, the difference being that call takes a comma separated list of arguments:
+
+```javascript
+fn.call(someObjectYouWantAsThis, arg1, arg2, arg3, etc);
+```
+
+`.apply()` on the other hand is identical in every way, except it accepts an array of arguments. As in the following example:
+
+```javascript
+var argsArray = [arg1, arg2, arg3];
+fn.apply(someObjectYouWantAsThis, argsArray);
+```
+
+The `.apply()` method is particularly helpful if you don't know how many arguments you need to pass to the function.
+
+Both of these methods have their uses, but they have something in common. They invoke the focal object, the function being bound, at the time the the line is executed with the context that is passed as an argument.  The question arises, what if we don't want to invoke the function at execution, but instead want to get a function that has the explicit `this` binding... then we could invoke it at another time or even multiple times.
+
+##Enter `.bind()`:
+
+`.bind()` is a function that returns a function.  The returned function has its `this` property bound to the argument passed at call time.
+
+```javascript
+var newFunc = fn.bind(objectToBind);
+```
+
+Here are a few examples of when using bind might be helpful.
+
+```javascript
+//Using the newFunc from above.  When we can use it:
+
+// When we need to delay action
+setTimeout(newFunc, 200000000);
+
+// In response to an event as a callback/eventHandler
+someObj.on('click', newFunc);
+
+// Setting it as a property on another object
+var someEntirelyNewObject = {
+  thatCoolFunction: newFunc
+}
+
+// For use in functional programing
+var mappedValues = someArray.map(newFunc);
+```
+
+With `newFunc`, I can now pass a definition of fn that is bound to objectToBind and invoke it wherever AND WHENEVER I need to have fn called on objectToBind.
+
+Even more interesting is the fact that I can pass arguments at the time I create the bound function allowing the returned function to have some arguments fixed along with the `this`.  This means that not only `this` as context can be bound, but arguments the function utilizes can be bound also.
+
+For example:
+
+```javascript
+function describe(descriptor1, descriptor2){
+  return this.first + ' ' + this.last + ' is really ' + descriptor1 + ' and ' + descriptor2 + '.';
+}
+
+var person = { first: 'Clark', last: 'Kent'};
+
+var describeClark = describe.bind(person, 'super'); //this is bound to person
+
+return describeClark('not human');
+// 'Clark Kent is really super and not human.'
+```
+In the previous example we start with a function declaration of `describe`. We then declare a variable and assign it to `person`, setting properties `first` and `last`. At this point things get interesting.  We save the function that is created by binding `person` to `describe` and passing one of the two `descriptor` arguments.  We save a reference to the newly created function in the variable `describeClark`.
+
+Lastly, we return the invocation of `describeClark` (the new function) with the missing argument and get the completed string. The bound object `person` is supplying the values where this[propName] is specified. The additional argument passed when `describeClark` was created is still available when `describeClark` is invoked some time later.  This practice of creating a function with partially applied arguments is called currying.
+
+## A Deeper Dive
+
+To understand how this is working, let's take a look at how the bind function is actually working.  While perhaps not a full production implementation, the below example should illustrate conceptually the inner workings of `.bind()`.
+
+```javascript
+
+function bind(boundObj, arguments){
+  var currried = Array.prototype.slice.call(arguments);
+  var fn = this;
+
+  return function(arguments){
+    var passed = Array.prototype.slice.call(arguments);
+    return fn.apply(boundObj, curried.concat(passed));
+  }
+}
+```
+
+Whoa, what just happened? Well, `bind` is a function that is called on **function objects**, as in
+
+```javascript
+someFunc.bind(someObj);
+```
+The function `.bind()` takes as arguments the `boundObj` and a list of arguments.  The arguments that are initially passed in are curried.  That is, they are passed into the function that will be returned.  The function that will be bound is the `this` property at the time the `bind` function is called. The function to be returned keeps a reference to the curried arguments that were originally passed and combines them with the arguments that are passed on the returned function.
+
+When the returned function is finally called at some later time, we are invoking `fn` using `.apply()` and binding it to the `boundObj` we originally passed in, and with with an argument list that includes originally passed arguments and args passed at runtime.  Finally, the returned function actually returns the evaluation of the function it created, just in case the caller needs the value.
+
+I hope this helped you demystify and perhaps better undestand the use and power of `.bind()`.
